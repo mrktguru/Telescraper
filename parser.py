@@ -511,19 +511,21 @@ Examples:
         table.add_column("First Name", style="cyan", width=15)
         table.add_column("Username", style="green", width=15)
         table.add_column("User ID", style="yellow", width=12)
-        table.add_column("Comment (first 50 chars)", style="white", width=35)
+        table.add_column("Post URL", style="blue", width=30)
+        table.add_column("Comment (first 40 chars)", style="white", width=30)
 
         display_count = len(unique_results) if args.show_all else min(10, len(unique_results))
 
         for row in unique_results[:display_count]:
-            comment_preview = row['comment_text'][:50]
-            if len(row['comment_text']) > 50:
+            comment_preview = row['comment_text'][:40]
+            if len(row['comment_text']) > 40:
                 comment_preview += '…'
 
             table.add_row(
                 row['first_name'],
                 row['username'],
                 str(row['user_id']),
+                row.get('post_url', '-'),
                 comment_preview
             )
 
