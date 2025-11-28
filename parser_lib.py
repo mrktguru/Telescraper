@@ -101,6 +101,12 @@ class TelegramParser:
                     'error': f'Could not access channel: {str(e)}'
                 }
 
+            # Get channel username for building post URLs
+            channel_username = getattr(channel, 'username', None)
+            if not channel_username:
+                # Try to extract from URL
+                channel_username = channel_url.rstrip('/').split('/')[-1]
+
             # Get posts
             if status_callback:
                 status_callback(f"Fetching {posts_limit} posts...")
@@ -153,6 +159,9 @@ class TelegramParser:
 
                                 # Skip bots and deleted accounts
                                 if user and not user.bot:
+                                    # Build post URL
+                                    post_url = f"https://t.me/{channel_username}/{post.id}"
+
                                     comment_data = {
                                         'first_name': user.first_name or 'Unknown',
                                         'username': user.username or '-',
@@ -160,6 +169,7 @@ class TelegramParser:
                                         'comment_text': comment.text or '',
                                         'post_id': post.id,
                                         'comment_id': comment.id,
+                                        'post_url': post_url,
                                         'date': comment.date.isoformat() if comment.date else None
                                     }
                                     results.append(comment_data)
@@ -329,7 +339,7 @@ def save_to_csv(
     with open(filename, 'w', encoding='utf-8-sig', newline='') as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=['first_name', 'username', 'user_id', 'comment_text'],
+            fieldnames=['first_name', 'username', 'user_id', 'comment_text', 'post_url'],
             quoting=csv.QUOTE_MINIMAL
         )
         writer.writeheader()
@@ -339,7 +349,8 @@ def save_to_csv(
                 'first_name': row['first_name'],
                 'username': row['username'],
                 'user_id': row['user_id'],
-                'comment_text': row['comment_text']
+                'comment_text': row['comment_text'],
+                'post_url': row.get('post_url', '')
             })
 
     return str(filename)

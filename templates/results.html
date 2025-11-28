@@ -73,6 +73,7 @@
                                     <th>Имя</th>
                                     <th>Username</th>
                                     <th>User ID</th>
+                                    <th>Пост</th>
                                     <th>Комментарий</th>
                                 </tr>
                             </thead>
@@ -92,6 +93,15 @@
                                         {% endif %}
                                     </td>
                                     <td><code>{{ result.user_id }}</code></td>
+                                    <td>
+                                        {% if result.post_url %}
+                                            <a href="{{ result.post_url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-link-45deg"></i> Перейти
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <small>{{ result.comment_text[:100] }}{% if result.comment_text|length > 100 %}...{% endif %}</small>
                                     </td>
