@@ -12,34 +12,57 @@
                 </h2>
 
                 <form id="parseForm">
+                    <!-- Saved Channels -->
+                    <div class="mb-3">
+                        <label for="saved_channels" class="form-label">
+                            <i class="bi bi-bookmark-star"></i> Сохранённые каналы
+                        </label>
+                        <select class="form-select" id="saved_channels" onchange="selectSavedChannel()">
+                            <option value="">-- Выберите канал или введите вручную --</option>
+                        </select>
+                        <small class="text-muted">
+                            <a href="{{ url_for('channels') }}">Управление каналами</a>
+                        </small>
+                    </div>
+
                     <!-- Channel URL -->
                     <div class="mb-3">
                         <label for="channel_url" class="form-label">
                             <i class="bi bi-link-45deg"></i> URL канала
                         </label>
-                        <input
-                            type="url"
-                            class="form-control"
-                            id="channel_url"
-                            name="channel_url"
-                            value="https://t.me/okkosport"
-                            placeholder="https://t.me/channel_name"
-                            required>
+                        <div class="input-group">
+                            <input
+                                type="url"
+                                class="form-control"
+                                id="channel_url"
+                                name="channel_url"
+                                value="https://t.me/okkosport"
+                                placeholder="https://t.me/channel_name"
+                                required>
+                            <button class="btn btn-outline-secondary" type="button" onclick="saveCurrentChannel()" title="Сохранить канал">
+                                <i class="bi bi-bookmark-plus"></i>
+                            </button>
+                        </div>
                         <small class="text-muted">Пример: https://t.me/okkosport</small>
                     </div>
 
                     <!-- Posts limit -->
                     <div class="mb-3">
                         <label for="posts_limit" class="form-label">
-                            <i class="bi bi-hash"></i> Количество постов
+                            <i class="bi bi-hash"></i> Глубина парсинга (количество постов)
                         </label>
                         <select class="form-select" id="posts_limit" name="posts_limit">
-                            <option value="10">10 постов</option>
-                            <option value="30" selected>30 постов</option>
+                            <option value="10">10 постов (быстро)</option>
+                            <option value="30" selected>30 постов (рекомендуется)</option>
                             <option value="50">50 постов</option>
                             <option value="100">100 постов</option>
                             <option value="200">200 постов</option>
+                            <option value="500">500 постов (медленно)</option>
                         </select>
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i>
+                            Чем больше постов, тем дольше парсинг
+                        </small>
                     </div>
 
                     <!-- Keywords -->
@@ -168,6 +191,82 @@
 <script>
 let currentTaskId = null;
 let statusCheckInterval = null;
+let savedChannels = [];
+
+// Load saved channels on page load
+async function loadSavedChannels() {
+    try {
+        const response = await fetch('/api/channels');
+        const data = await response.json();
+        savedChannels = data;
+
+        const select = document.getElementById('saved_channels');
+        select.innerHTML = '<option value="">-- Выберите канал или введите вручную --</option>';
+
+        data.forEach(channel => {
+            const option = document.createElement('option');
+            option.value = channel.url;
+            option.textContent = `${channel.name} (${channel.url})`;
+            select.appendChild(option);
+        });
+
+        // Check if URL parameter is set
+        const urlParams = new URLSearchParams(window.location.search);
+        const channelUrl = urlParams.get('channel_url');
+        if (channelUrl) {
+            document.getElementById('channel_url').value = channelUrl;
+        }
+    } catch (error) {
+        console.error('Error loading channels:', error);
+    }
+}
+
+// Select saved channel
+function selectSavedChannel() {
+    const select = document.getElementById('saved_channels');
+    const channelUrl = select.value;
+
+    if (channelUrl) {
+        document.getElementById('channel_url').value = channelUrl;
+    }
+}
+
+// Save current channel
+async function saveCurrentChannel() {
+    const url = document.getElementById('channel_url').value;
+
+    if (!url) {
+        alert('Введите URL канала');
+        return;
+    }
+
+    const name = prompt('Введите название канала:', url.split('/').pop());
+    if (!name) return;
+
+    const description = prompt('Описание (опционально):', '');
+
+    try {
+        const response = await fetch('/api/channels', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name, url, description })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Канал сохранён!');
+            loadSavedChannels();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Канал уже существует'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Load channels on page load
+document.addEventListener('DOMContentLoaded', loadSavedChannels);
 
 document.getElementById('parseForm').addEventListener('submit', async (e) => {
     e.preventDefault();

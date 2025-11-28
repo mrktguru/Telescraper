@@ -8,6 +8,8 @@ import asyncio
 import argparse
 import os
 import sys
+import json
+from pathlib import Path
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
@@ -19,6 +21,69 @@ from parser_lib import TelegramParser, save_to_csv
 
 console = Console()
 
+# Channels config file
+CHANNELS_FILE = Path.home() / '.telescraper_channels.json'
+
+
+def load_channels():
+    """Load saved channels"""
+    if CHANNELS_FILE.exists():
+        with open(CHANNELS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_channels_config(channels):
+    """Save channels to config"""
+    with open(CHANNELS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(channels, f, ensure_ascii=False, indent=2)
+
+
+def add_channel_cli(name, url, description=''):
+    """Add channel to saved list"""
+    channels = load_channels()
+    channels[name] = {
+        'url': url,
+        'description': description
+    }
+    save_channels_config(channels)
+    console.print(f"✓ Канал '{name}' сохранён!", style="green")
+
+
+def list_channels_cli():
+    """List all saved channels"""
+    channels = load_channels()
+
+    if not channels:
+        console.print("Нет сохранённых каналов", style="yellow")
+        console.print("\nДобавьте канал:", style="dim")
+        console.print("  python parser.py --add-channel NAME URL", style="dim")
+        return
+
+    table = Table(title="Сохранённые каналы", show_header=True, header_style="bold magenta")
+    table.add_column("Название", style="cyan")
+    table.add_column("URL", style="green")
+    table.add_column("Описание", style="dim")
+
+    for name, info in channels.items():
+        table.add_row(name, info['url'], info.get('description', '-'))
+
+    console.print(table)
+    console.print("\nИспользование:", style="dim")
+    console.print("  python parser.py --channel-name NAME", style="dim")
+
+
+def delete_channel_cli(name):
+    """Delete saved channel"""
+    channels = load_channels()
+
+    if name in channels:
+        del channels[name]
+        save_channels_config(channels)
+        console.print(f"✓ Канал '{name}' удалён", style="green")
+    else:
+        console.print(f"✗ Канал '{name}' не найден", style="red")
+
 
 async def main():
     """Main CLI function"""
@@ -29,12 +94,17 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
-  python parser.py                              # Default: 30 posts, first 10 shown
-  python parser.py --posts 50                   # Parse 50 posts
-  python parser.py --show-all                   # Show all results in terminal
-  python parser.py --channel https://t.me/xxx   # Different channel
-  python parser.py --keywords "купить,продать"  # Filter by keywords
-  python parser.py --quiet --no-csv             # Minimal output, no file
+  # Parsing
+  python parser.py                                        # Default: 30 posts
+  python parser.py --posts 100                            # Parse 100 posts
+  python parser.py --channel https://t.me/xxx             # Different channel
+  python parser.py --channel-name mygroup --posts 50      # Use saved channel
+  python parser.py --keywords "купить,продать"            # Filter by keywords
+
+  # Channel management
+  python parser.py --list-channels                        # List saved channels
+  python parser.py --add-channel sport https://t.me/sport # Add channel
+  python parser.py --delete-channel sport                 # Delete channel
         '''
     )
 
@@ -48,12 +118,52 @@ Examples:
                         help='Minimal output (no per-post messages)')
     parser.add_argument('--channel', type=str, default='https://t.me/okkosport',
                         help='Channel URL (default: https://t.me/okkosport)')
+    parser.add_argument('--channel-name', type=str,
+                        help='Use saved channel by name')
     parser.add_argument('--keywords', type=str, default='',
                         help='Keywords to filter (comma-separated)')
     parser.add_argument('--keyword-mode', type=str, default='or', choices=['or', 'and'],
                         help='Keyword filter mode: "or" or "and" (default: or)')
 
+    # Channel management
+    parser.add_argument('--list-channels', action='store_true',
+                        help='List saved channels')
+    parser.add_argument('--add-channel', nargs='+', metavar=('NAME', 'URL'),
+                        help='Add channel: --add-channel NAME URL [DESCRIPTION]')
+    parser.add_argument('--delete-channel', type=str, metavar='NAME',
+                        help='Delete saved channel')
+
     args = parser.parse_args()
+
+    # Handle channel management commands
+    if args.list_channels:
+        list_channels_cli()
+        return
+
+    if args.add_channel:
+        if len(args.add_channel) < 2:
+            console.print("✗ Использование: --add-channel NAME URL [DESCRIPTION]", style="red")
+            return
+        name = args.add_channel[0]
+        url = args.add_channel[1]
+        description = ' '.join(args.add_channel[2:]) if len(args.add_channel) > 2 else ''
+        add_channel_cli(name, url, description)
+        return
+
+    if args.delete_channel:
+        delete_channel_cli(args.delete_channel)
+        return
+
+    # Resolve channel name to URL
+    if args.channel_name:
+        channels = load_channels()
+        if args.channel_name in channels:
+            args.channel = channels[args.channel_name]['url']
+            console.print(f"✓ Используется канал: {args.channel_name}", style="green")
+        else:
+            console.print(f"✗ Канал '{args.channel_name}' не найден", style="red")
+            console.print("Используйте --list-channels для просмотра сохранённых каналов", style="dim")
+            return
 
     # Print header
     console.print(Panel.fit(

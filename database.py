@@ -57,6 +57,20 @@ class Database:
             )
         ''')
 
+        # Channels table (saved channels)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS channels (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (id),
+                UNIQUE(user_id, url)
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -236,6 +250,78 @@ class Database:
         cursor.execute(
             'DELETE FROM tasks WHERE id = ? AND user_id = ?',
             (task_id, user_id)
+        )
+
+        affected = cursor.rowcount
+        conn.commit()
+        conn.close()
+
+        return affected > 0
+
+    # Channel methods
+    def add_channel(
+        self,
+        user_id: int,
+        name: str,
+        url: str,
+        description: str = ''
+    ) -> Optional[int]:
+        """Add saved channel"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO channels (user_id, name, url, description)
+                VALUES (?, ?, ?, ?)
+            ''', (user_id, name, url, description))
+
+            channel_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+
+            return channel_id
+        except sqlite3.IntegrityError:
+            # Channel already exists
+            return None
+
+    def get_user_channels(self, user_id: int) -> List[Dict]:
+        """Get user's saved channels"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT * FROM channels
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        ''', (user_id,))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+
+    def get_channel(self, channel_id: int) -> Optional[Dict]:
+        """Get channel by ID"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('SELECT * FROM channels WHERE id = ?', (channel_id,))
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            return dict(row)
+        return None
+
+    def delete_channel(self, channel_id: int, user_id: int) -> bool:
+        """Delete channel (only if belongs to user)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            'DELETE FROM channels WHERE id = ? AND user_id = ?',
+            (channel_id, user_id)
         )
 
         affected = cursor.rowcount

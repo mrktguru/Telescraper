@@ -343,5 +343,54 @@ def api_delete_task(task_id):
         return jsonify({'error': 'Task not found'}), 404
 
 
+# Channel routes
+
+@app.route('/channels')
+@login_required
+def channels():
+    """Channels management page"""
+    user_channels = db.get_user_channels(current_user.id)
+    return render_template('channels.html', channels=user_channels)
+
+
+@app.route('/api/channels', methods=['GET'])
+@login_required
+def api_get_channels():
+    """Get user's saved channels"""
+    channels = db.get_user_channels(current_user.id)
+    return jsonify(channels)
+
+
+@app.route('/api/channels', methods=['POST'])
+@login_required
+def api_add_channel():
+    """Add new channel"""
+    data = request.get_json()
+
+    name = data.get('name')
+    url = data.get('url')
+    description = data.get('description', '')
+
+    if not name or not url:
+        return jsonify({'error': 'Name and URL are required'}), 400
+
+    channel_id = db.add_channel(current_user.id, name, url, description)
+
+    if channel_id:
+        return jsonify({'success': True, 'channel_id': channel_id})
+    else:
+        return jsonify({'error': 'Channel already exists'}), 400
+
+
+@app.route('/api/channels/<int:channel_id>', methods=['DELETE'])
+@login_required
+def api_delete_channel(channel_id):
+    """Delete channel"""
+    if db.delete_channel(channel_id, current_user.id):
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': 'Channel not found'}), 404
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

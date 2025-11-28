@@ -52,3 +52,6 @@ Thumbs.db
 # Web application data
 data/app.db
 data/output/
+
+# CLI saved channels config
+.telescraper_channels.json
