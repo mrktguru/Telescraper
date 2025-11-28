@@ -495,6 +495,12 @@ Examples:
         summary += f"""
 ║ Filtered comments:          {stats['filtered_comments']:<28} ║"""
 
+    # Show skipped counts if any
+    if stats.get('skipped_bots', 0) > 0 or stats.get('skipped_errors', 0) > 0:
+        summary += f"""
+║ Skipped (bots):             {stats.get('skipped_bots', 0):<28} ║
+║ Skipped (errors):           {stats.get('skipped_errors', 0):<28} ║"""
+
     summary += f"""
 ║ Unique users collected:     {stats['unique_users']:<28} ║
 ╚══════════════════════════════════════════════════════════╝"""
