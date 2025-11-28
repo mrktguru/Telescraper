@@ -73,6 +73,9 @@
 
                     <!-- Download buttons -->
                     <div class="mb-4">
+                        <a href="{{ url_for('download', task_id=task.id, format='xlsx') }}" class="btn btn-success">
+                            <i class="bi bi-file-earmark-excel"></i> Скачать Excel
+                        </a>
                         <a href="{{ url_for('download', task_id=task.id, format='csv') }}" class="btn btn-primary">
                             <i class="bi bi-download"></i> Скачать CSV
                         </a>

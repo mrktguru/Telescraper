@@ -17,7 +17,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskPr
 from rich.panel import Panel
 from rich import box
 
-from parser_lib import TelegramParser, save_to_csv
+from parser_lib import TelegramParser, save_to_csv, save_to_excel
 
 console = Console()
 
@@ -551,17 +551,29 @@ Examples:
     else:
         console.print("\n⚠ No comments found\n", style="yellow")
 
-    # Save to CSV
+    # Save to files (CSV and Excel)
     if not args.no_csv and unique_results:
+        channel_name = args.channel.split('/')[-1].replace('https://t.me/', '')
+
+        # Save CSV
         try:
-            channel_name = args.channel.split('/')[-1].replace('https://t.me/', '')
-            filename = save_to_csv(unique_results, channel_name=channel_name)
+            csv_filename = save_to_csv(unique_results, channel_name=channel_name)
             console.print(
-                f"💾 Full data saved to: {filename}",
+                f"💾 CSV saved to: {csv_filename}",
                 style="bold green"
             )
         except Exception as e:
             console.print(f"⚠ Could not save CSV file: {e}", style="yellow")
+
+        # Save Excel
+        try:
+            excel_filename = save_to_excel(unique_results, channel_name=channel_name)
+            console.print(
+                f"📊 Excel saved to: {excel_filename}",
+                style="bold green"
+            )
+        except Exception as e:
+            console.print(f"⚠ Could not save Excel file: {e}", style="yellow")
 
     # Print hints
     console.print("\n📝 Options:", style="bold")

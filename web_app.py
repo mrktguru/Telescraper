@@ -13,7 +13,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from dotenv import load_dotenv
 
 from database import init_database
-from parser_lib import TelegramParser, save_to_csv, save_to_json
+from parser_lib import TelegramParser, save_to_csv, save_to_json, save_to_excel
 
 # Load environment variables
 load_dotenv()
@@ -121,9 +121,17 @@ def run_parsing_task(task_id, user_id):
                 timestamp=timestamp
             )
 
+            excel_path = save_to_excel(
+                result['unique_results'],
+                output_dir='data/output',
+                channel_name=channel_name,
+                timestamp=timestamp
+            )
+
             # Add file paths to result
             result['csv_file'] = csv_path
             result['json_file'] = json_path
+            result['excel_file'] = excel_path
 
             db.complete_task(task_id, result)
             active_tasks[task_id] = {'status': 'completed', 'progress': 100}
@@ -322,6 +330,8 @@ def download(task_id, format):
         file_path = result.get('csv_file')
     elif format == 'json':
         file_path = result.get('json_file')
+    elif format == 'xlsx':
+        file_path = result.get('excel_file')
     else:
         flash('Invalid format', 'danger')
         return redirect(url_for('results', task_id=task_id))

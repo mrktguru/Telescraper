@@ -415,3 +415,93 @@ def save_to_json(
         json.dump(json_results, f, ensure_ascii=False, indent=2)
 
     return str(filename)
+
+
+def save_to_excel(
+    results: List[Dict],
+    output_dir: str = './output',
+    channel_name: str = 'channel',
+    timestamp: Optional[str] = None
+) -> str:
+    """
+    Save results to Excel file (.xlsx)
+
+    Args:
+        results: List of comment dictionaries
+        output_dir: Output directory path
+        channel_name: Channel name for filename
+        timestamp: Custom timestamp (optional)
+
+    Returns:
+        Path to created Excel file
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    if not timestamp:
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
+    output_path = Path(output_dir)
+    output_path.mkdir(exist_ok=True)
+
+    filename = output_path / f'{channel_name}_commenters_{timestamp}.xlsx'
+
+    # Create workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Commenters"
+
+    # Define headers
+    headers = ['First Name', 'Username', 'User ID', 'Comment Text', 'Post URL', 'Date']
+
+    # Style for header row
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+
+    # Write headers
+    for col_num, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num, value=header)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+
+    # Write data
+    for row_num, result in enumerate(results, 2):
+        ws.cell(row=row_num, column=1, value=result.get('first_name', ''))
+        ws.cell(row=row_num, column=2, value=result.get('username', ''))
+        ws.cell(row=row_num, column=3, value=result.get('user_id', ''))
+        ws.cell(row=row_num, column=4, value=result.get('comment_text', ''))
+
+        # Add hyperlink for post URL
+        post_url = result.get('post_url', '')
+        if post_url:
+            cell = ws.cell(row=row_num, column=5, value=post_url)
+            cell.hyperlink = post_url
+            cell.font = Font(color="0563C1", underline="single")
+        else:
+            ws.cell(row=row_num, column=5, value='-')
+
+        ws.cell(row=row_num, column=6, value=result.get('date', ''))
+
+    # Auto-adjust column widths
+    column_widths = {
+        'A': 20,  # First Name
+        'B': 20,  # Username
+        'C': 15,  # User ID
+        'D': 50,  # Comment Text
+        'E': 35,  # Post URL
+        'F': 25,  # Date
+    }
+
+    for col, width in column_widths.items():
+        ws.column_dimensions[col].width = width
+
+    # Freeze header row
+    ws.freeze_panes = 'A2'
+
+    # Save workbook
+    wb.save(filename)
+
+    return str(filename)
