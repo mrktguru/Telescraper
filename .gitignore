@@ -48,3 +48,7 @@ Thumbs.db
 
 # Output files (optional - remove if you want to track CSV files)
 # output/*.csv
+
+# Web application data
+data/app.db
+data/output/

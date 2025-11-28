@@ -1,0 +1,19 @@
+# Web Application Dependencies
+
+# Base dependencies (from requirements.txt)
+telethon>=1.42.0
+python-dotenv>=1.0.0
+rich>=13.7.0
+setuptools>=69.0.0
+
+# Flask and extensions
+flask==3.0.0
+flask-login==0.6.3
+Werkzeug==3.0.1
+
+# Production server
+gunicorn==21.2.0
+
+# Russian morphology for keyword filtering
+pymorphy2==0.9.1
+pymorphy2-dicts-ru==2.4.417595.4580142
