@@ -160,7 +160,7 @@ class TelegramParser:
                                         'comment_text': comment.text or '',
                                         'post_id': post.id,
                                         'comment_id': comment.id,
-                                        'date': comment.date
+                                        'date': comment.date.isoformat() if comment.date else None
                                     }
                                     results.append(comment_data)
                             except Exception:
