@@ -82,6 +82,8 @@ class TelegramParser:
         start_time = time.time()
         results = []
         posts_with_comments = 0
+        skipped_bots = 0
+        skipped_errors = 0
 
         try:
             # Get channel entity
@@ -135,10 +137,13 @@ class TelegramParser:
 
                         while retries < max_retries:
                             try:
+                                # Get all comments (Telegram API limit is ~100 per request by default)
+                                # Using limit=10000 to get all comments in one request
+                                # For posts with more comments, consider using iter_messages
                                 comments = await self.client.get_messages(
                                     channel,
                                     reply_to=post.id,
-                                    limit=None
+                                    limit=10000
                                 )
                                 break
                             except FloodWaitError as e:
@@ -151,6 +156,14 @@ class TelegramParser:
                             if status_callback:
                                 status_callback(f"Skipping post #{post.id} after retries")
                             continue
+
+                        # Log comment count
+                        expected_comments = post.replies.replies
+                        received_comments = len(comments)
+                        if status_callback and received_comments < expected_comments:
+                            status_callback(
+                                f"⚠ Post #{post.id}: got {received_comments}/{expected_comments} comments"
+                            )
 
                         # Extract user data from each comment
                         for comment in comments:
@@ -173,8 +186,12 @@ class TelegramParser:
                                         'date': comment.date.isoformat() if comment.date else None
                                     }
                                     results.append(comment_data)
+                                elif user and user.bot:
+                                    # Count skipped bots
+                                    skipped_bots += 1
                             except Exception:
-                                # Skip this comment if we can't get sender
+                                # Count errors when getting sender
+                                skipped_errors += 1
                                 continue
 
                         # Rate limiting protection
@@ -219,6 +236,8 @@ class TelegramParser:
                     'total_comments': len(results),
                     'filtered_comments': len(filtered_results),
                     'unique_users': len(unique_results),
+                    'skipped_bots': skipped_bots,
+                    'skipped_errors': skipped_errors,
                     'elapsed_time': elapsed
                 }
             }

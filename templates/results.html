@@ -51,6 +51,26 @@
                         </div>
                     </div>
 
+                    <!-- Additional stats if available -->
+                    {% if stats.skipped_bots or stats.skipped_errors %}
+                    <div class="row mb-4">
+                        {% if stats.skipped_bots %}
+                        <div class="col-md-6">
+                            <div class="alert alert-info mb-0">
+                                <i class="bi bi-robot"></i> Пропущено ботов: <strong>{{ stats.skipped_bots }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if stats.skipped_errors %}
+                        <div class="col-md-6">
+                            <div class="alert alert-warning mb-0">
+                                <i class="bi bi-exclamation-triangle"></i> Пропущено (ошибки): <strong>{{ stats.skipped_errors }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
                     <!-- Download buttons -->
                     <div class="mb-4">
                         <a href="{{ url_for('download', task_id=task.id, format='csv') }}" class="btn btn-primary">
