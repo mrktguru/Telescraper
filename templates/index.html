@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+
+{% block title %}Telegram Parser - Главная{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card shadow">
+            <div class="card-body p-4">
+                <h2 class="card-title mb-4">
+                    <i class="bi bi-rocket"></i> Парсинг комментариев Telegram
+                </h2>
+
+                <form id="parseForm">
+                    <!-- Saved Channels -->
+                    <div class="mb-3">
+                        <label for="saved_channels" class="form-label">
+                            <i class="bi bi-bookmark-star"></i> Сохранённые каналы
+                        </label>
+                        <select class="form-select" id="saved_channels" onchange="selectSavedChannel()">
+                            <option value="">-- Выберите канал или введите вручную --</option>
+                        </select>
+                        <small class="text-muted">
+                            <a href="{{ url_for('channels') }}">Управление каналами</a>
+                        </small>
+                    </div>
+
+                    <!-- Channel URL -->
+                    <div class="mb-3">
+                        <label for="channel_url" class="form-label">
+                            <i class="bi bi-link-45deg"></i> URL канала
+                        </label>
+                        <div class="input-group">
+                            <input
+                                type="url"
+                                class="form-control"
+                                id="channel_url"
+                                name="channel_url"
+                                value="https://t.me/okkosport"
+                                placeholder="https://t.me/channel_name"
+                                required>
+                            <button class="btn btn-outline-secondary" type="button" onclick="saveCurrentChannel()" title="Сохранить канал">
+                                <i class="bi bi-bookmark-plus"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">Пример: https://t.me/okkosport</small>
+                    </div>
+
+                    <!-- Posts limit -->
+                    <div class="mb-3">
+                        <label for="posts_limit" class="form-label">
+                            <i class="bi bi-hash"></i> Глубина парсинга (количество постов)
+                        </label>
+                        <select class="form-select" id="posts_limit" name="posts_limit">
+                            <option value="10">10 постов (быстро)</option>
+                            <option value="30" selected>30 постов (рекомендуется)</option>
+                            <option value="50">50 постов</option>
+                            <option value="100">100 постов</option>
+                            <option value="200">200 постов</option>
+                            <option value="500">500 постов (медленно)</option>
+                        </select>
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i>
+                            Чем больше постов, тем дольше парсинг
+                        </small>
+                    </div>
+
+                    <!-- Keywords -->
+                    <div class="mb-3">
+                        <label for="keywords" class="form-label">
+                            <i class="bi bi-search"></i> Ключевые слова (опционально)
+                        </label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="keywords"
+                            name="keywords"
+                            placeholder="купить, продать, обменять">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i>
+                            Введите ключевые слова через запятую. Будет искать все формы слова (купить/куплю/купил).
+                            Оставьте пустым для парсинга всех комментариев.
+                        </small>
+                    </div>
+
+                    <!-- Keyword mode -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-filter"></i> Режим фильтрации
+                        </label>
+                        <div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="keyword_mode" id="mode_or" value="or" checked>
+                                <label class="form-check-label" for="mode_or">
+                                    ЛЮБОЕ слово (ИЛИ)
+                                </label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="keyword_mode" id="mode_and" value="and">
+                                <label class="form-check-label" for="mode_and">
+                                    ВСЕ слова (И)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit button -->
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="startBtn">
+                        <i class="bi bi-play-fill"></i> Начать парсинг
+                    </button>
+                </form>
+
+                <!-- Progress section (hidden by default) -->
+                <div id="progressSection" class="mt-4" style="display: none;">
+                    <hr>
+                    <h5><i class="bi bi-hourglass-split"></i> Прогресс парсинга</h5>
+
+                    <div class="alert alert-info" id="statusMessage">
+                        <i class="bi bi-info-circle"></i> Инициализация...
+                    </div>
+
+                    <div class="progress mb-2" style="height: 30px;">
+                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar" style="width: 0%">0%</div>
+                    </div>
+
+                    <p class="text-center text-muted" id="progressText">
+                        Обработано постов: 0/0
+                    </p>
+                </div>
+
+                <!-- Results preview section (hidden by default) -->
+                <div id="resultsSection" class="mt-4" style="display: none;">
+                    <hr>
+                    <h5><i class="bi bi-check-circle text-success"></i> Результаты</h5>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0" id="stat_posts">0</h3>
+                                    <small class="text-muted">Постов</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0" id="stat_comments">0</h3>
+                                    <small class="text-muted">Комментариев</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0" id="stat_filtered">0</h3>
+                                    <small class="text-muted">Отфильтровано</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0 text-primary" id="stat_users">0</h3>
+                                    <small class="text-muted">Пользователей</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a id="viewResultsBtn" href="#" class="btn btn-success">
+                            <i class="bi bi-eye"></i> Посмотреть результаты
+                        </a>
+                        <a id="downloadCsvBtn" href="#" class="btn btn-outline-primary">
+                            <i class="bi bi-download"></i> Скачать CSV
+                        </a>
+                        <a id="downloadJsonBtn" href="#" class="btn btn-outline-secondary">
+                            <i class="bi bi-download"></i> Скачать JSON
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentTaskId = null;
+let statusCheckInterval = null;
+let savedChannels = [];
+
+// Load saved channels on page load
+async function loadSavedChannels() {
+    try {
+        const response = await fetch('/api/channels');
+        const data = await response.json();
+        savedChannels = data;
+
+        const select = document.getElementById('saved_channels');
+        select.innerHTML = '<option value="">-- Выберите канал или введите вручную --</option>';
+
+        data.forEach(channel => {
+            const option = document.createElement('option');
+            option.value = channel.url;
+            option.textContent = `${channel.name} (${channel.url})`;
+            select.appendChild(option);
+        });
+
+        // Check if URL parameter is set
+        const urlParams = new URLSearchParams(window.location.search);
+        const channelUrl = urlParams.get('channel_url');
+        if (channelUrl) {
+            document.getElementById('channel_url').value = channelUrl;
+        }
+    } catch (error) {
+        console.error('Error loading channels:', error);
+    }
+}
+
+// Select saved channel
+function selectSavedChannel() {
+    const select = document.getElementById('saved_channels');
+    const channelUrl = select.value;
+
+    if (channelUrl) {
+        document.getElementById('channel_url').value = channelUrl;
+    }
+}
+
+// Save current channel
+async function saveCurrentChannel() {
+    const url = document.getElementById('channel_url').value;
+
+    if (!url) {
+        alert('Введите URL канала');
+        return;
+    }
+
+    const name = prompt('Введите название канала:', url.split('/').pop());
+    if (!name) return;
+
+    const description = prompt('Описание (опционально):', '');
+
+    try {
+        const response = await fetch('/api/channels', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name, url, description })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Канал сохранён!');
+            loadSavedChannels();
+        } else {
+            alert('Ошибка: ' + (data.error || 'Канал уже существует'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Load channels on page load
+document.addEventListener('DOMContentLoaded', loadSavedChannels);
+
+document.getElementById('parseForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Get form data
+    const formData = {
+        channel_url: document.getElementById('channel_url').value,
+        posts_limit: document.getElementById('posts_limit').value,
+        keywords: document.getElementById('keywords').value,
+        keyword_mode: document.querySelector('input[name="keyword_mode"]:checked').value
+    };
+
+    // Disable form
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('progressSection').style.display = 'block';
+    document.getElementById('resultsSection').style.display = 'none';
+
+    try {
+        // Start parsing
+        const response = await fetch('/api/parse', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            currentTaskId = data.task_id;
+            checkStatus();
+        } else {
+            alert('Ошибка при запуске парсинга');
+            document.getElementById('startBtn').disabled = false;
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+        document.getElementById('startBtn').disabled = false;
+    }
+});
+
+async function checkStatus() {
+    if (!currentTaskId) return;
+
+    try {
+        const response = await fetch(`/api/status/${currentTaskId}`);
+        const data = await response.json();
+
+        // Update progress
+        const progress = data.progress || 0;
+        document.getElementById('progressBar').style.width = progress + '%';
+        document.getElementById('progressBar').textContent = progress + '%';
+        document.getElementById('progressText').textContent =
+            `Обработано постов: ${data.current || 0}/${data.total || 0}`;
+
+        // Update status message
+        if (data.status === 'running') {
+            document.getElementById('statusMessage').className = 'alert alert-info';
+            document.getElementById('statusMessage').innerHTML =
+                '<i class="bi bi-hourglass-split"></i> Парсинг в процессе...';
+        } else if (data.status === 'completed') {
+            document.getElementById('statusMessage').className = 'alert alert-success';
+            document.getElementById('statusMessage').innerHTML =
+                '<i class="bi bi-check-circle"></i> Парсинг завершён!';
+
+            // Load results
+            loadResults();
+            clearInterval(statusCheckInterval);
+            document.getElementById('startBtn').disabled = false;
+        } else if (data.status === 'failed') {
+            document.getElementById('statusMessage').className = 'alert alert-danger';
+            document.getElementById('statusMessage').innerHTML =
+                '<i class="bi bi-x-circle"></i> Ошибка при парсинге';
+            clearInterval(statusCheckInterval);
+            document.getElementById('startBtn').disabled = false;
+        }
+
+        // Continue checking if still running
+        if (data.status === 'running') {
+            statusCheckInterval = setTimeout(checkStatus, 2000);
+        }
+    } catch (error) {
+        console.error('Error checking status:', error);
+    }
+}
+
+async function loadResults() {
+    try {
+        const response = await fetch(`/api/results/${currentTaskId}`);
+        const data = await response.json();
+
+        const result = data.result;
+        const stats = result.stats;
+
+        // Update stats
+        document.getElementById('stat_posts').textContent = stats.posts_checked;
+        document.getElementById('stat_comments').textContent = stats.total_comments;
+        document.getElementById('stat_filtered').textContent = stats.filtered_comments;
+        document.getElementById('stat_users').textContent = stats.unique_users;
+
+        // Update links
+        document.getElementById('viewResultsBtn').href = `/results/${currentTaskId}`;
+        document.getElementById('downloadCsvBtn').href = `/download/${currentTaskId}.csv`;
+        document.getElementById('downloadJsonBtn').href = `/download/${currentTaskId}.json`;
+
+        // Show results section
+        document.getElementById('resultsSection').style.display = 'block';
+    } catch (error) {
+        console.error('Error loading results:', error);
+    }
+}
+</script>
+{% endblock %}

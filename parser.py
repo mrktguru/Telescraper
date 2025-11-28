@@ -1,32 +1,92 @@
 #!/usr/bin/env python3
 """
-Telegram Comments Parser - Extract comments from Telegram channel posts
+Telegram Comments Parser - CLI Interface
+Uses parser_lib for core parsing logic
 """
 
 import asyncio
 import argparse
-import csv
 import os
 import sys
-import time
-from datetime import datetime
+import json
 from pathlib import Path
-from typing import List, Dict
-
 from dotenv import load_dotenv
-from telethon import TelegramClient
-from telethon.errors import FloodWaitError, ChannelPrivateError
 from rich.console import Console
 from rich.table import Table
-from rich.progress import track
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich.panel import Panel
 from rich import box
 
+from parser_lib import TelegramParser, save_to_csv
+
 console = Console()
+
+# Channels config file
+CHANNELS_FILE = Path.home() / '.telescraper_channels.json'
+
+
+def load_channels():
+    """Load saved channels"""
+    if CHANNELS_FILE.exists():
+        with open(CHANNELS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+
+def save_channels_config(channels):
+    """Save channels to config"""
+    with open(CHANNELS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(channels, f, ensure_ascii=False, indent=2)
+
+
+def add_channel_cli(name, url, description=''):
+    """Add channel to saved list"""
+    channels = load_channels()
+    channels[name] = {
+        'url': url,
+        'description': description
+    }
+    save_channels_config(channels)
+    console.print(f"✓ Канал '{name}' сохранён!", style="green")
+
+
+def list_channels_cli():
+    """List all saved channels"""
+    channels = load_channels()
+
+    if not channels:
+        console.print("Нет сохранённых каналов", style="yellow")
+        console.print("\nДобавьте канал:", style="dim")
+        console.print("  python parser.py --add-channel NAME URL", style="dim")
+        return
+
+    table = Table(title="Сохранённые каналы", show_header=True, header_style="bold magenta")
+    table.add_column("Название", style="cyan")
+    table.add_column("URL", style="green")
+    table.add_column("Описание", style="dim")
+
+    for name, info in channels.items():
+        table.add_row(name, info['url'], info.get('description', '-'))
+
+    console.print(table)
+    console.print("\nИспользование:", style="dim")
+    console.print("  python parser.py --channel-name NAME", style="dim")
+
+
+def delete_channel_cli(name):
+    """Delete saved channel"""
+    channels = load_channels()
+
+    if name in channels:
+        del channels[name]
+        save_channels_config(channels)
+        console.print(f"✓ Канал '{name}' удалён", style="green")
+    else:
+        console.print(f"✗ Канал '{name}' не найден", style="red")
 
 
 async def main():
-    """Main function to parse Telegram comments"""
+    """Main CLI function"""
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(
@@ -34,11 +94,17 @@ async def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog='''
 Examples:
-  python parser.py                              # Default: 30 posts, first 10 shown
-  python parser.py --posts 50                   # Parse 50 posts
-  python parser.py --show-all                   # Show all results in terminal
-  python parser.py --channel https://t.me/xxx   # Different channel
-  python parser.py --quiet --no-csv             # Minimal output, no file
+  # Parsing
+  python parser.py                                        # Default: 30 posts
+  python parser.py --posts 100                            # Parse 100 posts
+  python parser.py --channel https://t.me/xxx             # Different channel
+  python parser.py --channel-name mygroup --posts 50      # Use saved channel
+  python parser.py --keywords "купить,продать"            # Filter by keywords
+
+  # Channel management
+  python parser.py --list-channels                        # List saved channels
+  python parser.py --add-channel sport https://t.me/sport # Add channel
+  python parser.py --delete-channel sport                 # Delete channel
         '''
     )
 
@@ -52,8 +118,52 @@ Examples:
                         help='Minimal output (no per-post messages)')
     parser.add_argument('--channel', type=str, default='https://t.me/okkosport',
                         help='Channel URL (default: https://t.me/okkosport)')
+    parser.add_argument('--channel-name', type=str,
+                        help='Use saved channel by name')
+    parser.add_argument('--keywords', type=str, default='',
+                        help='Keywords to filter (comma-separated)')
+    parser.add_argument('--keyword-mode', type=str, default='or', choices=['or', 'and'],
+                        help='Keyword filter mode: "or" or "and" (default: or)')
+
+    # Channel management
+    parser.add_argument('--list-channels', action='store_true',
+                        help='List saved channels')
+    parser.add_argument('--add-channel', nargs='+', metavar=('NAME', 'URL'),
+                        help='Add channel: --add-channel NAME URL [DESCRIPTION]')
+    parser.add_argument('--delete-channel', type=str, metavar='NAME',
+                        help='Delete saved channel')
 
     args = parser.parse_args()
+
+    # Handle channel management commands
+    if args.list_channels:
+        list_channels_cli()
+        return
+
+    if args.add_channel:
+        if len(args.add_channel) < 2:
+            console.print("✗ Использование: --add-channel NAME URL [DESCRIPTION]", style="red")
+            return
+        name = args.add_channel[0]
+        url = args.add_channel[1]
+        description = ' '.join(args.add_channel[2:]) if len(args.add_channel) > 2 else ''
+        add_channel_cli(name, url, description)
+        return
+
+    if args.delete_channel:
+        delete_channel_cli(args.delete_channel)
+        return
+
+    # Resolve channel name to URL
+    if args.channel_name:
+        channels = load_channels()
+        if args.channel_name in channels:
+            args.channel = channels[args.channel_name]['url']
+            console.print(f"✓ Используется канал: {args.channel_name}", style="green")
+        else:
+            console.print(f"✗ Канал '{args.channel_name}' не найден", style="red")
+            console.print("Используйте --list-channels для просмотра сохранённых каналов", style="dim")
+            return
 
     # Print header
     console.print(Panel.fit(
@@ -78,228 +188,156 @@ Examples:
         console.print("\n💡 Get credentials at: https://my.telegram.org/auth", style="dim")
         sys.exit(1)
 
-    # Initialize Telegram client
-    console.print("\n📡 Connecting to Telegram...", style="yellow")
-    client = TelegramClient('session', api_id, api_hash)
+    # Parse keywords
+    keywords = []
+    if args.keywords:
+        keywords = [k.strip() for k in args.keywords.split(',') if k.strip()]
 
+    # Initialize parser
+    tg_parser = TelegramParser(api_id, api_hash, phone)
+
+    # Status callback for non-quiet mode
+    def status_callback(message: str):
+        if not args.quiet:
+            console.print(f"  {message}", style="dim")
+
+    # Connect to Telegram
+    console.print("\n📡 Connecting to Telegram...", style="yellow")
     try:
-        await client.start(phone)
+        await tg_parser.connect()
         console.print(f"✓ Authenticated as: {phone}", style="green bold")
     except Exception as e:
         console.print(f"❌ Authentication failed: {e}", style="red bold")
         sys.exit(1)
 
-    # Get channel
+    # Display parsing parameters
     console.print(f"\n🎯 Target: {args.channel}", style="cyan")
-    console.print(f"📊 Posts to check: {args.posts}\n", style="cyan")
+    console.print(f"📊 Posts to check: {args.posts}", style="cyan")
+    if keywords:
+        console.print(f"🔍 Keywords: {', '.join(keywords)} (mode: {args.keyword_mode})", style="cyan")
+    console.print()
 
-    try:
-        channel = await client.get_entity(args.channel)
-    except ChannelPrivateError:
-        console.print("❌ Error: Channel is private or you're not subscribed", style="red bold")
-        await client.disconnect()
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"❌ Error: Could not access channel: {e}", style="red bold")
-        await client.disconnect()
-        sys.exit(1)
+    # Progress bar
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console
+    ) as progress:
+        task = progress.add_task("Parsing posts...", total=100)
 
-    # Parse comments
-    results = []
-    start_time = time.time()
-    posts_with_comments = 0
+        def progress_callback(percentage, current, total):
+            progress.update(task, completed=percentage, description=f"Parsing posts... ({current}/{total})")
 
-    try:
-        posts = await client.get_messages(channel, limit=args.posts)
-
-        for post in track(posts, description="Parsing posts..."):
-            # Check if post has comments
-            if post.replies and post.replies.replies > 0:
-                posts_with_comments += 1
-
-                if not args.quiet:
-                    console.print(
-                        f"Post #{post.id}: ✓ {post.replies.replies} comments",
-                        style="green"
-                    )
-
-                try:
-                    # Get comments for this post with retry logic
-                    retries = 0
-                    max_retries = 3
-
-                    while retries < max_retries:
-                        try:
-                            comments = await client.get_messages(
-                                channel,
-                                reply_to=post.id,
-                                limit=None
-                            )
-                            break
-                        except FloodWaitError as e:
-                            console.print(
-                                f"⚠ Rate limit hit. Waiting {e.seconds} seconds...",
-                                style="yellow"
-                            )
-                            await asyncio.sleep(e.seconds)
-                            retries += 1
-
-                    if retries == max_retries:
-                        console.print(
-                            f"⚠ Skipping post #{post.id} after {max_retries} retries",
-                            style="yellow"
-                        )
-                        continue
-
-                    # Extract user data from each comment
-                    for comment in comments:
-                        try:
-                            user = await comment.get_sender()
-
-                            # Skip bots and deleted accounts
-                            if user and not user.bot:
-                                results.append({
-                                    'first_name': user.first_name or 'Unknown',
-                                    'username': user.username or '-',
-                                    'user_id': user.id,
-                                    'comment_text': comment.text or ''
-                                })
-                        except Exception as e:
-                            # Skip this comment if we can't get sender
-                            if not args.quiet:
-                                console.print(
-                                    f"⚠ Could not get sender for comment: {e}",
-                                    style="dim yellow"
-                                )
-                            continue
-
-                    # Rate limiting protection
-                    await asyncio.sleep(1)
-
-                    # Extra delay for posts with many comments
-                    if len(comments) > 100:
-                        await asyncio.sleep(2)
-
-                except Exception as e:
-                    console.print(
-                        f"⚠ Error parsing post #{post.id}: {e}",
-                        style="yellow"
-                    )
-                    continue
-            else:
-                if not args.quiet:
-                    console.print(f"Post #{post.id}: - no comments", style="dim")
-
-        elapsed = time.time() - start_time
-        console.print(
-            f"\n⏱️  Completed in {elapsed:.0f} seconds\n",
-            style="bold green"
+        # Parse channel
+        result = await tg_parser.parse_channel(
+            channel_url=args.channel,
+            posts_limit=args.posts,
+            keywords=keywords,
+            keyword_mode=args.keyword_mode,
+            progress_callback=progress_callback,
+            status_callback=status_callback if not args.quiet else None
         )
 
-        # Deduplicate by user_id (keep first occurrence)
-        seen_users = set()
-        unique_results = []
-        for row in results:
-            if row['user_id'] not in seen_users:
-                seen_users.add(row['user_id'])
-                unique_results.append(row)
+    # Disconnect
+    await tg_parser.disconnect()
 
-        bots_filtered = 0  # We already filter bots during parsing
+    # Check result
+    if not result['success']:
+        console.print(f"\n❌ Error: {result.get('error', 'Unknown error')}", style="red bold")
+        sys.exit(1)
 
-        # Print summary
-        summary = f"""╔══════════════════════════════════════════════════════════╗
+    # Get results
+    stats = result['stats']
+    unique_results = result['unique_results']
+
+    # Print completion
+    console.print(
+        f"\n⏱️  Completed in {stats['elapsed_time']:.0f} seconds\n",
+        style="bold green"
+    )
+
+    # Print summary
+    summary = f"""╔══════════════════════════════════════════════════════════╗
 ║                    PARSING RESULTS                       ║
 ╠══════════════════════════════════════════════════════════╣
-║ Total posts checked:        {len(posts):<28} ║
-║ Posts with comments:        {posts_with_comments:<28} ║
-║ Total comments found:       {len(results):<28} ║
-║ Unique users collected:     {len(unique_results):<28} ║
-║ Bots filtered out:          {bots_filtered:<28} ║
+║ Total posts checked:        {stats['posts_checked']:<28} ║
+║ Posts with comments:        {stats['posts_with_comments']:<28} ║
+║ Total comments found:       {stats['total_comments']:<28} ║"""
+
+    if keywords:
+        summary += f"""
+║ Filtered comments:          {stats['filtered_comments']:<28} ║"""
+
+    summary += f"""
+║ Unique users collected:     {stats['unique_users']:<28} ║
 ╚══════════════════════════════════════════════════════════╝"""
 
-        console.print(summary, style="bold cyan")
+    console.print(summary, style="bold cyan")
 
-        # Print results table
-        if unique_results:
-            table = Table(
-                show_header=True,
-                header_style="bold magenta",
-                box=box.ROUNDED
+    # Print results table
+    if unique_results:
+        table = Table(
+            show_header=True,
+            header_style="bold magenta",
+            box=box.ROUNDED
+        )
+        table.add_column("First Name", style="cyan", width=15)
+        table.add_column("Username", style="green", width=15)
+        table.add_column("User ID", style="yellow", width=12)
+        table.add_column("Comment (first 50 chars)", style="white", width=35)
+
+        display_count = len(unique_results) if args.show_all else min(10, len(unique_results))
+
+        for row in unique_results[:display_count]:
+            comment_preview = row['comment_text'][:50]
+            if len(row['comment_text']) > 50:
+                comment_preview += '…'
+
+            table.add_row(
+                row['first_name'],
+                row['username'],
+                str(row['user_id']),
+                comment_preview
             )
-            table.add_column("First Name", style="cyan", width=15)
-            table.add_column("Username", style="green", width=15)
-            table.add_column("User ID", style="yellow", width=12)
-            table.add_column("Comment (first 50 chars)", style="white", width=35)
 
-            display_count = len(unique_results) if args.show_all else min(10, len(unique_results))
+        console.print(table)
 
-            for row in unique_results[:display_count]:
-                comment_preview = row['comment_text'][:50]
-                if len(row['comment_text']) > 50:
-                    comment_preview += '…'
-
-                table.add_row(
-                    row['first_name'],
-                    row['username'],
-                    str(row['user_id']),
-                    comment_preview
-                )
-
-            console.print(table)
-
-            if not args.show_all and len(unique_results) > 10:
-                console.print(
-                    f"\n💡 Showing first 10 of {len(unique_results)} users.",
-                    style="dim"
-                )
-                console.print(
-                    "   Run with --show-all to see all results\n",
-                    style="dim"
-                )
-            else:
-                console.print()  # Empty line for spacing
+        if not args.show_all and len(unique_results) > 10:
+            console.print(
+                f"\n💡 Showing first 10 of {len(unique_results)} users.",
+                style="dim"
+            )
+            console.print(
+                "   Run with --show-all to see all results\n",
+                style="dim"
+            )
         else:
-            console.print("\n⚠ No comments found\n", style="yellow")
+            console.print()  # Empty line for spacing
+    else:
+        console.print("\n⚠ No comments found\n", style="yellow")
 
-        # Save to CSV
-        if not args.no_csv and unique_results:
-            timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-            output_dir = Path('./output')
-            output_dir.mkdir(exist_ok=True)
-
-            # Extract channel name from URL for filename
+    # Save to CSV
+    if not args.no_csv and unique_results:
+        try:
             channel_name = args.channel.split('/')[-1].replace('https://t.me/', '')
-            filename = output_dir / f'{channel_name}_commenters_{timestamp}.csv'
+            filename = save_to_csv(unique_results, channel_name=channel_name)
+            console.print(
+                f"💾 Full data saved to: {filename}",
+                style="bold green"
+            )
+        except Exception as e:
+            console.print(f"⚠ Could not save CSV file: {e}", style="yellow")
 
-            try:
-                with open(filename, 'w', encoding='utf-8-sig', newline='') as f:
-                    writer = csv.DictWriter(
-                        f,
-                        fieldnames=['first_name', 'username', 'user_id', 'comment_text'],
-                        quoting=csv.QUOTE_MINIMAL
-                    )
-                    writer.writeheader()
-                    writer.writerows(unique_results)
-
-                console.print(
-                    f"💾 Full data saved to: {filename}",
-                    style="bold green"
-                )
-            except Exception as e:
-                console.print(f"⚠ Could not save CSV file: {e}", style="yellow")
-
-        # Print hints
-        console.print("\n📝 Options:", style="bold")
-        console.print("  --show-all    Show all users in terminal", style="dim")
-        console.print("  --posts N     Parse N posts (default: 30)", style="dim")
-        console.print("  --no-csv      Don't save CSV file", style="dim")
-        console.print("  --quiet       Minimal output\n", style="dim")
-
-    except Exception as e:
-        console.print(f"\n❌ Unexpected error: {e}", style="red bold")
-        raise
-    finally:
-        await client.disconnect()
+    # Print hints
+    console.print("\n📝 Options:", style="bold")
+    console.print("  --show-all           Show all users in terminal", style="dim")
+    console.print("  --posts N            Parse N posts (default: 30)", style="dim")
+    console.print("  --keywords \"word\"    Filter by keywords", style="dim")
+    console.print("  --keyword-mode MODE  Keyword mode: 'or' or 'and'", style="dim")
+    console.print("  --no-csv             Don't save CSV file", style="dim")
+    console.print("  --quiet              Minimal output\n", style="dim")
 
 
 if __name__ == '__main__':

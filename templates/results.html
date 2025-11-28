@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Результаты - Telegram Parser{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title mb-4">
+                    <i class="bi bi-table"></i> Результаты парсинга
+                </h2>
+
+                {% if task.status == 'completed' and task.result %}
+                    {% set stats = task.result.stats %}
+                    {% set results = task.result.unique_results %}
+
+                    <!-- Stats -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0">{{ stats.posts_checked }}</h4>
+                                    <small class="text-muted">Постов проверено</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0">{{ stats.total_comments }}</h4>
+                                    <small class="text-muted">Комментариев найдено</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0">{{ stats.filtered_comments }}</h4>
+                                    <small class="text-muted">После фильтрации</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h4 class="mb-0 text-primary">{{ stats.unique_users }}</h4>
+                                    <small class="text-muted">Уникальных пользователей</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Download buttons -->
+                    <div class="mb-4">
+                        <a href="{{ url_for('download', task_id=task.id, format='csv') }}" class="btn btn-primary">
+                            <i class="bi bi-download"></i> Скачать CSV
+                        </a>
+                        <a href="{{ url_for('download', task_id=task.id, format='json') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-download"></i> Скачать JSON
+                        </a>
+                        <a href="{{ url_for('history') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-left"></i> Назад к истории
+                        </a>
+                    </div>
+
+                    <!-- Results table -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover" id="resultsTable">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Имя</th>
+                                    <th>Username</th>
+                                    <th>User ID</th>
+                                    <th>Комментарий</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in results[:100] %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>{{ result.first_name }}</td>
+                                    <td>
+                                        {% if result.username != '-' %}
+                                            <a href="https://t.me/{{ result.username }}" target="_blank">
+                                                @{{ result.username }}
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><code>{{ result.user_id }}</code></td>
+                                    <td>
+                                        <small>{{ result.comment_text[:100] }}{% if result.comment_text|length > 100 %}...{% endif %}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if results|length > 100 %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Показано первых 100 результатов из {{ results|length }}.
+                        Скачайте CSV или JSON для просмотра всех данных.
+                    </div>
+                    {% endif %}
+
+                {% elif task.status == 'failed' %}
+                    <div class="alert alert-danger">
+                        <h5><i class="bi bi-x-circle"></i> Ошибка при парсинге</h5>
+                        <p>{{ task.error }}</p>
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">
+                            <i class="bi bi-arrow-left"></i> Попробовать снова
+                        </a>
+                    </div>
+
+                {% elif task.status == 'running' %}
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-hourglass-split"></i> Парсинг выполняется</h5>
+                        <p>Прогресс: {{ task.progress }}%</p>
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">
+                            <i class="bi bi-arrow-left"></i> Вернуться
+                        </a>
+                    </div>
+
+                {% else %}
+                    <div class="alert alert-secondary">
+                        <h5><i class="bi bi-clock"></i> Задача в очереди</h5>
+                        <p>Ожидание выполнения...</p>
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">
+                            <i class="bi bi-arrow-left"></i> Вернуться
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Telegram Parser{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-body p-5">
+                <h2 class="text-center mb-4">
+                    <i class="bi bi-person-plus text-primary"></i>
+                    Регистрация
+                </h2>
+
+                <form method="POST" action="{{ url_for('register') }}">
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required autofocus>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Пароль</label>
+                        <input type="password" class="form-control" id="password" name="password" required minlength="6">
+                        <small class="text-muted">Минимум 6 символов</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password_confirm" class="form-label">Подтвердите пароль</label>
+                        <input type="password" class="form-control" id="password_confirm" name="password_confirm" required minlength="6">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 mb-3">
+                        <i class="bi bi-person-check"></i> Зарегистрироваться
+                    </button>
+
+                    <div class="text-center">
+                        <small>
+                            Уже есть аккаунт?
+                            <a href="{{ url_for('login') }}">Войти</a>
+                        </small>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}История - Telegram Parser{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title mb-4">
+                    <i class="bi bi-clock-history"></i> История парсинга
+                </h2>
+
+                {% if tasks %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Канал</th>
+                                <th>Постов</th>
+                                <th>Ключевые слова</th>
+                                <th>Статус</th>
+                                <th>Результаты</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for task in tasks %}
+                            <tr>
+                                <td>
+                                    <small>{{ task.created_at }}</small>
+                                </td>
+                                <td>
+                                    <a href="{{ task.channel_url }}" target="_blank">
+                                        {{ task.channel_url.split('/')[-1] }}
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </a>
+                                </td>
+                                <td>{{ task.posts_limit }}</td>
+                                <td>
+                                    {% if task.keywords %}
+                                        <span class="badge bg-secondary">
+                                            {{ task.keywords|join(', ') }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if task.status == 'completed' %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Завершено
+                                        </span>
+                                    {% elif task.status == 'running' %}
+                                        <span class="badge bg-primary">
+                                            <i class="bi bi-hourglass-split"></i> Выполняется
+                                        </span>
+                                    {% elif task.status == 'failed' %}
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-x-circle"></i> Ошибка
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-clock"></i> Ожидание
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if task.status == 'completed' and task.result %}
+                                        <strong class="text-primary">
+                                            {{ task.result.stats.unique_users }} пользователей
+                                        </strong>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if task.status == 'completed' %}
+                                        <a href="{{ url_for('results', task_id=task.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('download', task_id=task.id, format='csv') }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-download"></i> CSV
+                                        </a>
+                                        <button onclick="deleteTask({{ task.id }})" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    {% elif task.status == 'running' %}
+                                        <a href="{{ url_for('index') }}" class="btn btn-sm btn-secondary">
+                                            <i class="bi bi-arrow-clockwise"></i> Проверить
+                                        </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    История пуста. <a href="{{ url_for('index') }}">Запустите парсинг</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function deleteTask(taskId) {
+    if (!confirm('Удалить эту задачу?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/task/${taskId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Ошибка при удалении');
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+</script>
+{% endblock %}
