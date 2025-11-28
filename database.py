@@ -9,6 +9,13 @@ from typing import List, Dict, Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
+def json_serialize_default(obj):
+    """JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
+
+
 class Database:
     """Database manager"""
 
@@ -205,7 +212,7 @@ class Database:
         cursor = conn.cursor()
 
         status = 'completed' if not error else 'failed'
-        result_json = json.dumps(result) if result else None
+        result_json = json.dumps(result, default=json_serialize_default) if result else None
 
         cursor.execute('''
             UPDATE tasks
